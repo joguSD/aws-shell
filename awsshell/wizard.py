@@ -41,6 +41,7 @@ class Wizard(object):
                 raise WizardException("Stage not found: %s" % current_stage)
             stage.execute()
             current_stage = stage.get_next_stage()
+        print(self._env)
 
 
 class Stage(object):
@@ -71,10 +72,7 @@ class Stage(object):
         # union of parameters and env_parameters, conflicts favor env_params
         parameters = dict(parameters, **env_parameters)
         # execute operation passing all parameters
-        result = operation(**parameters)
-        if self.retrieval.get('Path'):
-            result = jmespath.search(self.retrieval['Path'], result)
-        return result
+        return operation(**parameters)
 
     def _handle_retrieval(self):
         print(self.prompt)
@@ -82,9 +80,13 @@ class Stage(object):
         if not self.retrieval:
             return {}
         elif self.retrieval['Type'] == 'Static':
-            return self.__handle_static_retrieval()
+            data = self.__handle_static_retrieval()
         elif self.retrieval['Type'] == 'Request':
-            return self.__handle_request_retrieval()
+            data = self.__handle_request_retrieval()
+        # Apply JMESPath query if given
+        if self.retrieval.get('Path'):
+            data = jmespath.search(self.retrieval['Path'], data)
+        return data
 
     def _resolve_parameters(self, keys):
         for key in keys:
@@ -134,3 +136,6 @@ class Environment(object):
 
     def retrieve(self, path):
         return jmespath.search(path, self._variables)
+
+    def __str__(self):
+        return json.dumps(self._variables, indent=4, sort_keys=True)
