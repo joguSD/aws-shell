@@ -1,13 +1,11 @@
-import re
 import json
 import jmespath
 import botocore.session
+from botocore import xform_name
 
 
-# TODO copy pasta'd from stackoverflow... maybe we have something else?
-def camel_to_snake(name):
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+class WizardException(Exception):
+    pass
 
 
 class Wizard(object):
@@ -19,8 +17,9 @@ class Wizard(object):
 
     # Loads the wizards from the spec in dict form
     def load_from_dict(self, spec):
-        self.start_stage = spec.get('StartStage')
-        # TODO if no start stage raise exception? default to first in array?
+        self.start_stage = spec.get('StartStage', None)
+        if not self.start_stage:
+            raise WizardException("Start stage not specified")
         self.stages = {}
         for s in spec['Stages']:
             stage = Stage(s, self._env)
@@ -39,20 +38,21 @@ class Wizard(object):
         while current_stage:
             stage = self.stages.get(current_stage, None)
             if not stage:
-                raise Exception("Stage does not exist: %s" % current_stage)
+                raise WizardException("Stage not found: %s" % current_stage)
             stage.execute()
             current_stage = stage.get_next_stage()
 
 
 class Stage(object):
 
-    KEYS = ['Name', 'Prompt', 'Retrieval',
-            'Interaction', 'Resolution', 'NextStage']
-
     def __init__(self, spec, env):
         self._wizard_env = env
-        for key in Stage.KEYS:
-            setattr(self, camel_to_snake(key), spec.get(key, None))
+        self.name = spec.get('Name', None)
+        self.prompt = spec.get('Prompt', None)
+        self.retrieval = spec.get('Retrieval', None)
+        self.next_stage = spec.get('NextStage', None)
+        self.resolution = spec.get('Resolution', None)
+        self.interaction = spec.get('Interaction', None)
 
     def __handle_static_retrieval(self):
         return self.retrieval.get('Resource')
@@ -64,7 +64,7 @@ class Stage(object):
         session = botocore.session.get_session()
         client = session.create_client(req['Service'])
         # get the operation from the client
-        operation = getattr(client, camel_to_snake(req['Operation']))
+        operation = getattr(client, xform_name(req['Operation']))
         # get any parameters
         parameters = req.get('Parameters', {})
         env_parameters = self._resolve_parameters(req.get('EnvParameters', {}))
@@ -84,7 +84,7 @@ class Stage(object):
         elif self.retrieval['Type'] == 'Static':
             return self.__handle_static_retrieval()
         elif self.retrieval['Type'] == 'Request':
-            return self.__handle_request_retreival()
+            return self.__handle_request_retrieval()
 
     def _resolve_parameters(self, keys):
         for key in keys:
@@ -100,7 +100,7 @@ class Stage(object):
             data = data[0]
         elif self.interaction['ScreenType'] == 'SimplePrompt':
             for field in data:
-                data[field] = '500'
+                data[field] = 'random'
         return data
 
     def _handle_resolution(self, data):
