@@ -12,7 +12,7 @@ class WizardException(Exception):
 
 
 class WizardLoader(object):
-    """This class is responsible for searching various paths to locate wizards.
+    """This class is responsible for searching various paths to locate wizards
 
     Given a wizard name it will return a wizard object representing the wizard.
     Delegates to botocore for finding and loading the JSON models.
