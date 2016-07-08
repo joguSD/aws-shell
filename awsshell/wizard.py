@@ -7,14 +7,15 @@ from awsshell.resource import index
 
 
 class WizardException(Exception):
-    """Base exception class for the Wizards"""
+    """Base exception class for the Wizards."""
     pass
 
 
 class WizardLoader(object):
-    """This class is responsible for searching various paths to locate wizard
-    models. Given a wizard name it will return a wizard object representing the
-    wizard. Delegates to botocore for finding and loading the JSON models.
+    """This class is responsible for searching various paths to locate wizards.
+
+    Given a wizard name it will return a wizard object representing the wizard.
+    Delegates to botocore for finding and loading the JSON models.
     """
 
     def __init__(self):
@@ -37,8 +38,7 @@ class WizardLoader(object):
         return self.create_wizard(model)
 
     def create_wizard(self, model):
-        """Given a wizard specification, returns an instance of a wizard based
-        on that model.
+        """Given a wizard specification, returns an instance of that wizard.
 
         :type model: dict
         :param model: The wizard specification to be used.
@@ -56,12 +56,10 @@ class WizardLoader(object):
 
 
 class Wizard(object):
-    """The main wizard object containing all of the stages, the environment,
-    botocore sessions, and the logic to drive the wizards.
-    """
+    """Main wizard object. Contains main wizard driving logic."""
 
     def __init__(self, start_stage, stages):
-        """Constructs a new Wizard
+        """Construct a new Wizard.
 
         :type start_stage: str
         :param start_stage: The name of the starting stage for the wizard.
@@ -76,8 +74,7 @@ class Wizard(object):
         self._load_stages(stages)
 
     def _load_stages(self, stages):
-        """Loads the stages array by converting the given array of stage models
-        into stage objects and storing them into the stages dictionary.
+        """Load the stages dictionary from the given array of stage models.
 
         :type stages: array of dict
         :param stages: An array of stage models to be converted into objects.
@@ -96,7 +93,7 @@ class Wizard(object):
             self.stages[stage.name] = stage
 
     def execute(self):
-        """Runs the wizard. Executes Stages until a final stage is reached.
+        """Run the wizard. Execute Stages until a final stage is reached.
 
         :raises: :class:`WizardException`
         """
@@ -113,13 +110,11 @@ class Wizard(object):
 
 
 class Stage(object):
-    """The Stage object contains the meta information for a stage and logic
-    required to perform all steps present.
-    """
+    """The Stage object. Contains logic to run all steps of the stage."""
 
     def __init__(self, env, creator, name=None, prompt=None, retrieval=None,
                  next_stage=None, resolution=None, interaction=None):
-        """Constructs a new Stage object.
+        """Construct a new Stage object.
 
         :type env: :class:`Environment`
         :param env: The environment this stage is based in.
@@ -208,7 +203,7 @@ class Stage(object):
             self._env.store(self.resolution['Key'], data)
 
     def get_next_stage(self):
-        """Resolves the next stage name for the stage after this one.
+        """Resolve the next stage name for the stage after this one.
 
         :rtype: str
         :return: The name of the next stage.
@@ -222,7 +217,8 @@ class Stage(object):
 
     # Executes all three steps of the stage
     def execute(self):
-        """Executes all steps in the stage if they are present.
+        """Execute all steps in the stage if they are present.
+
         1) Perform Retrieval.
         2) Perform Interaction on retrieved data.
         3) Perform Resolution to store data in the environment.
@@ -233,9 +229,7 @@ class Stage(object):
 
 
 class Environment(object):
-    """This class is used to store variables into a dict and retrieve them
-    via JMESPath queries instead of normal keys.
-    """
+    """Store vars into a dict and retrives them with JMESPath queries."""
 
     def __init__(self):
         self._variables = {}
@@ -244,7 +238,7 @@ class Environment(object):
         return json.dumps(self._variables, indent=4, sort_keys=True)
 
     def store(self, key, val):
-        """Stores a variable under the given key.
+        """Store a variable under the given key.
 
         :type key: str
         :param key: The key to store the value as.
@@ -255,7 +249,7 @@ class Environment(object):
         self._variables[key] = val
 
     def retrieve(self, path):
-        """Retrieves the variable corresponding to the given JMESPath query.
+        """Retrieve the variable corresponding to the given JMESPath query.
 
         :type path: str
         :param path: The JMESPath query to be used when locating the variable.
@@ -263,10 +257,11 @@ class Environment(object):
         return jmespath.search(path, self._variables)
 
     def resolve_parameters(self, keys):
-        """Resolves all keys in the given keys dict. Expects all values in the
-        keys dict to be JMESPath queries to be used when retrieving from the
-        environment. Interpolates all values from their path to the actual
-        value stored in the environment.
+        """Resolve all keys in the given keys dict.
+
+        Expects all values in the keys dict to be JMESPath queries to be used
+        when retrieving from the environment. Interpolates all values from
+        their path to the actual value stored in the environment.
 
         :type keys: dict
         :param keys: A dict of keys to paths that need to be resolved.
