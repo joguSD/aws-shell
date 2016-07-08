@@ -1,5 +1,5 @@
 import pytest
-from awsshell.wizard import Environment, Wizard
+from awsshell.wizard import Environment, WizardLoader
 
 
 @pytest.fixture
@@ -32,6 +32,11 @@ def test_resolve_parameters():
 
 
 @pytest.fixture
+def loader():
+    return WizardLoader()
+
+
+@pytest.fixture
 def wizard_spec():
     return {
         'StartStage': 'TestStage',
@@ -53,9 +58,9 @@ def wizard_spec():
     }
 
 
-def test_from_spec(wizard_spec):
+def test_from_spec(wizard_spec, loader):
     # Test that the spec is translated to the correct attrs
-    wizard = Wizard(wizard_spec)
+    wizard = loader.create_wizard(wizard_spec)
     stage_spec = wizard_spec['Stages'][0]
     stage = wizard.stages['TestStage']
     assert stage.prompt == 'Prompting'
@@ -66,40 +71,40 @@ def test_from_spec(wizard_spec):
     assert not stage.interaction
 
 
-def test_static_retrieval(wizard_spec):
+def test_static_retrieval(wizard_spec, loader):
     # Test that static retrieval reads the data from the spec and resolves into
     # the wizard's environment under the correct key
     wizard_spec['Stages'][0]['Resolution'] = {'Key': 'CreationType'}
-    wizard = Wizard(wizard_spec)
+    wizard = loader.create_wizard(wizard_spec)
     stage = wizard.stages['TestStage']
     stage.execute()
     assert stage.retrieval['Resource'] == wizard.env.retrieve('CreationType')
 
 
-def test_static_retrieval_with_query(wizard_spec):
+def test_static_retrieval_with_query(wizard_spec, loader):
     # Test that static retrieval reads the data and can apply a JMESpath query
     wizard_spec['Stages'][0]['Retrieval']['Path'] = '[0].Stage'
     wizard_spec['Stages'][0]['Resolution'] = {'Key': 'CreationType'}
-    wizard = Wizard(wizard_spec)
+    wizard = loader.create_wizard(wizard_spec)
     stage = wizard.stages['TestStage']
     stage.execute()
     assert wizard.env.retrieve('CreationType') == 'StageOne'
 
 
-def test_next_stage_resolution(wizard_spec):
+def test_next_stage_resolution(wizard_spec, loader):
     # Test that the stage can resolve the next stage from env
     wizard_spec['Stages'][0]['Retrieval']['Path'] = '[0]'
-    wizard = Wizard(wizard_spec)
+    wizard = loader.create_wizard(wizard_spec)
     stage = wizard.stages['TestStage']
     stage.execute()
     assert stage.get_next_stage() == 'StageOne'
 
 
-def test_next_stage_static(wizard_spec):
+def test_next_stage_static(wizard_spec, loader):
     # Test that the stage can resolve static next stage
     wizard_spec['Stages'][0]['NextStage'] = \
         {'Type': 'Name', 'Name': 'NextStageName'}
-    wizard = Wizard(wizard_spec)
+    wizard = loader.create_wizard(wizard_spec)
     stage = wizard.stages['TestStage']
     stage.execute()
     assert stage.get_next_stage() == 'NextStageName'

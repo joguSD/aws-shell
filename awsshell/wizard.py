@@ -26,12 +26,33 @@ class WizardLoader(object):
 
         :type name: str
         :param name: The name of the desired wizard.
+
+        :rtype: :class:`Wizard`
+        :return: The wizard object loaded.
         """
         # TODO possible naming collisions here, always pick first for now
         # Need to discuss and specify wizard invocation
         services = self._loader.list_available_services(type_name=name)
         model = self._loader.load_service_model(services[0], name)
-        return Wizard(model)
+        return self.create_wizard(model)
+
+    def create_wizard(self, model):
+        """Given a wizard specification, returns an instance of a wizard based
+        on that model.
+
+        :type model: dict
+        :param model: The wizard specification to be used.
+
+        :rtype: :class:`Wizard`
+        :return: The wizard object created.
+
+        :raises: :class:`WizardException`
+        """
+        start_stage = model.get('StartStage')
+        if not start_stage:
+            raise WizardException("Start stage not specified")
+        stages = model.get('Stages')
+        return Wizard(start_stage, stages)
 
 
 class Wizard(object):
@@ -39,40 +60,45 @@ class Wizard(object):
     botocore sessions, and the logic to drive the wizards.
     """
 
-    def __init__(self, spec=None):
+    def __init__(self, start_stage, stages):
         """Constructs a new Wizard
 
-        :type spec: dict
-        :param spec: (Optional) Constructs the wizard by loading the given
-        model specification.
+        :type start_stage: str
+        :param start_stage: The name of the starting stage for the wizard.
+
+        :type stages: array of dict
+        :param stages: An array of stage models to generate stages from.
         """
         self.env = Environment()
         self._session = botocore.session.get_session()
         self._cached_creator = index.CachedClientCreator(self._session)
-        if spec:
-            self.load_from_dict(spec)
+        self.start_stage = start_stage
+        self._load_stages(stages)
 
-    def load_from_dict(self, spec):
-        """Loads the model specification from a dict, populating the
-        wizard object.
+    def _load_stages(self, stages):
+        """Loads the stages array by converting the given array of stage models
+        into stage objects and storing them into the stages dictionary.
 
-        :type spec: dict
-        :param spec: The model specification.
-
-        :raises: :class:`WizardException`
+        :type stages: array of dict
+        :param stages: An array of stage models to be converted into objects.
         """
-        self.start_stage = spec.get('StartStage', None)
-        if not self.start_stage:
-            raise WizardException("Start stage not specified")
         self.stages = {}
-        for s in spec['Stages']:
-            stage = Stage(s, self)
+        for stage_model in stages:
+            stage_attrs = {
+                'name': stage_model.get('Name'),
+                'prompt': stage_model.get('Prompt'),
+                'retrieval': stage_model.get('Retrieval'),
+                'next_stage': stage_model.get('NextStage'),
+                'resolution': stage_model.get('Resolution'),
+                'interaction': stage_model.get('Interaction'),
+            }
+            stage = Stage(self.env, self._cached_creator, **stage_attrs)
             self.stages[stage.name] = stage
 
     def execute(self):
         """Runs the wizard. Executes Stages until a final stage is reached.
 
-        :raises: :class:WizardException
+        :raises: :class:`WizardException`
         """
         current_stage = self.start_stage
         while current_stage:
@@ -82,7 +108,8 @@ class Wizard(object):
             stage.execute()
             current_stage = stage.get_next_stage()
         # TODO decouple wizard from all I/O
-        sys.stdout.write(str(self.env)+'\n')
+        sys.stdout.write(str(self.env) + '\n')
+        sys.stdout.flush()
 
 
 class Stage(object):
@@ -90,22 +117,43 @@ class Stage(object):
     required to perform all steps present.
     """
 
-    def __init__(self, spec, wizard):
+    def __init__(self, env, creator, name=None, prompt=None, retrieval=None,
+                 next_stage=None, resolution=None, interaction=None):
         """Constructs a new Stage object.
 
-        :type spec: dict
-        :param spec: The stage specification model.
+        :type env: :class:`Environment`
+        :param env: The environment this stage is based in.
 
-        :type wizard: :class:`Wizard`
-        :param wizard: The wizard that this stage is a part of.
+        :type creator: :class:`CachedClientCreator`
+        :param creator: A botocore client creator that supports caching.
+
+        :type name: str
+        :param name: A unique identifier for the stage.
+
+        :type prompt: str
+        :param prompt: A simple message on the overall goal of the stage.
+
+        :type retrieval: dict
+        :param retrieval: The source of data for this stage.
+
+        :type next_stage: dict
+        :param next_stage: Describes what stage comes after this one.
+
+        :type resolution: dict
+        :param resolution: Describes what data to store in the environment.
+
+        :type interaction: dict
+        :param interaction: Describes what type of screen is to be used for
+        interaction.
         """
-        self._wizard = wizard
-        self.name = spec.get('Name', None)
-        self.prompt = spec.get('Prompt', None)
-        self.retrieval = spec.get('Retrieval', None)
-        self.next_stage = spec.get('NextStage', None)
-        self.resolution = spec.get('Resolution', None)
-        self.interaction = spec.get('Interaction', None)
+        self._env = env
+        self._cached_creator = creator
+        self.name = name
+        self.prompt = prompt
+        self.retrieval = retrieval
+        self.next_stage = next_stage
+        self.resolution = resolution
+        self.interaction = interaction
 
     def __handle_static_retrieval(self):
         return self.retrieval.get('Resource')
@@ -113,13 +161,13 @@ class Stage(object):
     def __handle_request_retrieval(self):
         req = self.retrieval['Resource']
         # get client from wizard's cache
-        client = self._wizard._cached_creator.create_client(req['Service'])
+        client = self._cached_creator.create_client(req['Service'])
         # get the operation from the client
         operation = getattr(client, xform_name(req['Operation']))
         # get any parameters
         parameters = req.get('Parameters', {})
         env_parameters = \
-            self._wizard.env.resolve_parameters(req.get('EnvParameters', {}))
+            self._env.resolve_parameters(req.get('EnvParameters', {}))
         # union of parameters and env_parameters, conflicts favor env_params
         parameters = dict(parameters, **env_parameters)
         # execute operation passing all parameters
@@ -127,7 +175,8 @@ class Stage(object):
 
     def _handle_retrieval(self):
         # TODO decouple wizard from all I/O
-        sys.stdout.write(self.prompt+'\n')
+        sys.stdout.write(self.prompt + '\n')
+        sys.stdout.flush()
         # In case of no retrieval, empty dict
         if not self.retrieval:
             return {}
@@ -156,7 +205,7 @@ class Stage(object):
         if self.resolution:
             if self.resolution.get('Path'):
                 data = jmespath.search(self.resolution['Path'], data)
-            self._wizard.env.store(self.resolution['Key'], data)
+            self._env.store(self.resolution['Key'], data)
 
     def get_next_stage(self):
         """Resolves the next stage name for the stage after this one.
@@ -169,7 +218,7 @@ class Stage(object):
         elif self.next_stage['Type'] == 'Name':
             return self.next_stage['Name']
         elif self.next_stage['Type'] == 'Variable':
-            return self._wizard.env.retrieve(self.next_stage['Name'])
+            return self._env.retrieve(self.next_stage['Name'])
 
     # Executes all three steps of the stage
     def execute(self):
