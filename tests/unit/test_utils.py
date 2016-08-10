@@ -2,11 +2,14 @@ from tests import unittest
 import os
 import tempfile
 import shutil
+import six
+import pytest
 
 from awsshell.utils import FSLayer
 from awsshell.utils import InMemoryFSLayer
 from awsshell.utils import FileReadError
 from awsshell.utils import temporary_file
+from awsshell.utils import force_unicode
 
 
 class TestFSLayer(unittest.TestCase):
@@ -93,3 +96,13 @@ class TestTemporaryFile(unittest.TestCase):
             f.seek(0)
             assert f.read() == "foobar"
         self.assertFalse(os.path.isfile(filename))
+
+
+strings = ['', u'', 'some text', u'some text', 'yu\u3086', u'yu\u3086']
+
+
+@pytest.mark.parametrize('text', strings)
+def test_force_unicode(text):
+    unicode_text = force_unicode(text)
+    assert unicode_text == text
+    assert isinstance(unicode_text, six.text_type)
