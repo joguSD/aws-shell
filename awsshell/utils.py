@@ -1,6 +1,7 @@
 """Utility module for misc aws shell functions."""
 from __future__ import print_function
 import os
+import six
 import contextlib
 import tempfile
 import uuid
@@ -118,3 +119,15 @@ class InMemoryFSLayer(object):
 
     def file_exists(self, filename):
         return filename in self._file_mapping
+
+
+def force_unicode(obj, encoding='utf8'):
+    if isinstance(obj, dict):
+        for key in obj:
+            obj[key] = force_unicode(obj[key])
+    elif isinstance(obj, list):
+        obj = [force_unicode(val) for val in obj]
+    elif isinstance(obj, six.string_types):
+        if not isinstance(obj, six.text_type):
+            obj = obj.decode(encoding)
+    return obj
