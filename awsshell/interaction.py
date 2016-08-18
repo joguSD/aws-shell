@@ -121,7 +121,12 @@ class SimplePrompt(Interaction):
         sys.stdout.write('%s \n' % self.prompt)
         sys.stdout.flush()
         for field in data:
-            data[field] = self._prompter(field + ': ')
+            response = self._prompter(field + ': ')
+            try:
+                response = int(response)
+            except ValueError:
+                pass
+            data[field] = response
         return data
 
 
