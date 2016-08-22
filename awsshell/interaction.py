@@ -28,7 +28,7 @@ class Interaction(with_metaclass(ABCMeta, object)):
     stages.
     """
 
-    def __init__(self, model, prompt):
+    def __init__(self, model, prompt, style=None):
         self._model = model
         self.prompt = prompt
 
@@ -45,13 +45,15 @@ class FilePrompt(Interaction):
     contents of the file as the result of the interaction.
     """
 
-    def __init__(self, model, prompt_msg, prompter=prompt):
+    def __init__(self, model, prompt_msg, prompter=prompt, style=None):
         super(FilePrompt, self).__init__(model, prompt_msg)
         self._prompter = prompter
+        self.style = style
 
     def get_path(self):
         cmpltr = PathCompleter(expanduser=True)
-        selection = self._prompter('%s ' % self.prompt, completer=cmpltr)
+        selection = self._prompter('%s ' % self.prompt, completer=cmpltr,
+                                   style=self.style)
         return os.path.expanduser(selection)
 
     def execute(self, data, fslayer=FSLayer()):
@@ -73,9 +75,10 @@ class SimpleSelect(Interaction):
     used as is.
     """
 
-    def __init__(self, model, prompt_msg, prompter=select_prompt):
+    def __init__(self, model, prompt_msg, prompter=select_prompt, style=None):
         super(SimpleSelect, self).__init__(model, prompt_msg)
         self._prompter = prompter
+        self.style = style
 
     def execute(self, data, show_meta=False):
         if not isinstance(data, list) or len(data) < 1:
@@ -84,11 +87,13 @@ class SimpleSelect(Interaction):
             display_data = jmespath.search(self._model['Path'], data)
             options_meta = data if show_meta else None
             result = self._prompter('%s ' % self.prompt, display_data,
-                                    options_meta=options_meta)
+                                    options_meta=options_meta,
+                                    style=self.style)
             (selected, index) = result
             return data[index]
         else:
-            (selected, index) = self._prompter('%s ' % self.prompt, data)
+            (selected, index) = self._prompter('%s ' % self.prompt, data,
+                                               style=self.style)
             return selected
 
 
@@ -111,7 +116,7 @@ class SimplePrompt(Interaction):
     each key creating a completed dict of key to user input.
     """
 
-    def __init__(self, model, prompt_msg, prompter=prompt):
+    def __init__(self, model, prompt_msg, prompter=prompt, style=None):
         super(SimplePrompt, self).__init__(model, prompt_msg)
         self._prompter = prompter
 
@@ -194,8 +199,8 @@ class InteractionLoader(object):
         'FilePrompt': FilePrompt
     }
 
-    def __init__(self):
-        pass
+    def __init__(self, style=None):
+        self.style = style
 
     def create(self, model, prompt):
         """Create an Interaction object given the model and prompt to be used.
@@ -217,6 +222,6 @@ class InteractionLoader(object):
         name = model.get('ScreenType')
         interaction_class = self._INTERACTIONS.get(name)
         if interaction_class is not None:
-            return interaction_class(model, prompt)
+            return interaction_class(model, prompt, style=self.style)
         else:
             raise InteractionException('Invalid interaction type: %s' % name)

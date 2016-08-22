@@ -26,6 +26,7 @@ from awsshell.toolbar import Toolbar
 from awsshell.utils import build_config_file_path, temporary_file
 from awsshell import compat
 from awsshell.wizard import WizardLoader
+from awsshell.interaction import InteractionLoader
 
 
 LOG = logging.getLogger(__name__)
@@ -163,6 +164,10 @@ class WizardHandler(object):
         a wizard model with a matching name. Returns and executes the loaded
         wizard.
         """
+        if self._wizard_loader is None:
+            style = application.cli.application.style
+            loader = InteractionLoader(style=style)
+            self._wizard_loader = WizardLoader(interaction_loader=loader)
         if len(command) != 2:
             self._err.write("Invalid syntax, must be: .wizard wizname\n")
             return
