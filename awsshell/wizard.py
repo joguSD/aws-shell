@@ -387,5 +387,8 @@ class Environment(object):
         """
         resolved_dict = {}
         for key in keys:
-            resolved_dict[key] = self.retrieve(keys[key])
+            retrieved = self.retrieve(keys[key])
+            if retrieved is not None:
+                resolved_dict[key] = retrieved
+
         return resolved_dict
