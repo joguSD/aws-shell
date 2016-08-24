@@ -10,11 +10,13 @@ ON_WINDOWS = platform.system() == 'Windows'
 if PY3:
     from html.parser import HTMLParser
     text_type = str
+    long_type = int
     from io import StringIO
     import dbm
 else:
     from HTMLParser import HTMLParser
     text_type = unicode
+    long_type = long
     from cStringIO import StringIO
     import anydbm as dbm
 
