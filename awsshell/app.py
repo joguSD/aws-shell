@@ -154,8 +154,6 @@ class WizardHandler(object):
         self._output = output
         self._err = err
         self._wizard_loader = loader
-        if self._wizard_loader is None:
-            self._wizard_loader = WizardLoader()
 
     def run(self, command, application):
         """Run the specified wizard.
@@ -165,8 +163,7 @@ class WizardHandler(object):
         wizard.
         """
         if self._wizard_loader is None:
-            style = application.cli.application.style
-            loader = InteractionLoader(style=style)
+            loader = InteractionLoader(style=application.cli.application.style)
             self._wizard_loader = WizardLoader(interaction_loader=loader)
         if len(command) != 2:
             self._err.write("Invalid syntax, must be: .wizard wizname\n")
